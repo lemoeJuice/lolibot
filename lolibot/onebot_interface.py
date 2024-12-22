@@ -37,16 +37,28 @@ class ResultStore:
             del cls._futures[seq]
 
 
-async def _handle_api(payload: Dict[str, Any]):
-    print(f'Api: {payload}')
-    ResultStore.add(payload)
-
-
 def _handle_onebot_response(payload):  # 是否需要写成异步
     if 'post_type' in payload:  # event
         asyncio.create_task(_handle_event(payload))
     else:  # api
         asyncio.create_task(_handle_api(payload))
+
+
+async def _handle_api(payload: Dict[str, Any]):
+    print(f'Api: {payload}')
+    ResultStore.add(payload)
+
+
+from .__init__ import _send_wsr
+
+
+async def call_onebot_api(action_name: str, params: Dict[str, Any], timeout: float = 3):
+    seq = await _SequenceGenerator.next()
+    await _send_wsr({'action': f'{action_name}', 'params': params, 'echo': seq})
+    result = await ResultStore.fetch(seq, timeout)
+    print(f'Api result: {result}')
+    if result['status'] == 'failed':
+        raise Exception(f'Api Action received but failed: {result}')
 
 
 async def _handle_meta(payload: Dict[str, Any]):
@@ -74,18 +86,6 @@ async def _handle_event(payload):
         await _handle_message(payload)
     else:  # notice（群标识等） & request（加好友加群等）
         pass
-
-
-from .__init__ import _send_wsr
-
-
-async def call_onebot_api(action_name: str, params: Dict[str, Any], timeout: float = 3):
-    seq = await _SequenceGenerator.next()
-    await _send_wsr({'action': f'{action_name}', 'params': params, 'echo': seq})
-    result = await ResultStore.fetch(seq, timeout)
-    print(f'Api result: {result}')
-    if result['status'] == 'failed':
-        raise Exception(f'Api Action received but failed: {result}')
 
 
 async def send_message(is_group: bool, obj_id: int, content: list[Dict[str, Any]]):

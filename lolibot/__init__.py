@@ -7,14 +7,25 @@ except ImportError:
 
 from .onebot_interface import _handle_onebot_response
 
+# 当前框架为单客户端模型，如果需要连接多个bot账户，可能需要传递ws对象以防止消息串台
+connected = False
+
 
 async def _handle_wsr_conn() -> None:
+    global connected
+    if connected:
+        return
+
     role = websocket.headers['X-Client-Role'].lower()
     if role != 'universal':
         raise Exception('当前仅支持universal客户端连接.')
-    while True:
-        payload = json.loads(await websocket.receive())
-        _handle_onebot_response(payload)
+
+    try:
+        while True:
+            payload = json.loads(await websocket.receive())
+            _handle_onebot_response(payload)
+    finally:
+        connected = False
 
 
 async def _send_wsr(payload) -> None:
