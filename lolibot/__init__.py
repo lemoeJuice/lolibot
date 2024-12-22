@@ -1,21 +1,19 @@
-from typing import Dict, Any
+from reliances import json
+from reliances import Dict, Any
+
 import asyncio
-
-try:
-    import ujson as json
-except ImportError:
-    import json
-
 from quart import Quart, websocket
 
 
 class _SequenceGenerator:
     _seq = -1
+    _lock = asyncio.Lock()
 
     @classmethod
-    def next(cls) -> int:
-        cls._seq = (cls._seq + 1) % 2147483647
-        return cls._seq + 1  # 不能返回0
+    async def next(cls) -> int:
+        async with cls._lock:
+            cls._seq = (cls._seq + 1) % 2147483647
+            return cls._seq + 1  # 不能返回0，不然result存储类的add方法会出问题
 
 
 class ResultStore:
@@ -49,7 +47,7 @@ def _handle_api_result(result: Dict[str, Any]) -> Any:
 
 
 async def send_message(is_group: bool, obj_id: int, content: list[Dict[str, Any]]):
-    seq: int = _SequenceGenerator.next()
+    seq = await _SequenceGenerator.next()
     params = {'message_type': 'group', 'group_id': obj_id, 'message': content} if is_group \
         else {'message_type': 'private', 'user_id': obj_id, 'message': content}
     await websocket.send(json.dumps({'action': 'send_msg', 'params': params, 'echo': seq}))
@@ -85,19 +83,21 @@ async def _handle_api(payload: Dict[str, Any]):
 async def _handle_wsr() -> None:
     while True:
         payload = json.loads(await websocket.receive())
-        if post_type := payload.get('post_type'):
+        if post_type := payload.get('post_type'):  # event
             if post_type == 'meta_event':
                 asyncio.create_task(_handle_meta(payload))
             elif post_type == 'message':
                 asyncio.create_task(_handle_message(payload))
+            else:  # notice（群标识等） & request（加好友加群等）
+                pass
         else:  # 会不会有其他情况
             asyncio.create_task(_handle_api(payload))
 
 
 class Bot:
-    def __init__(self, import_name: str = '', *, server_app_kwargs: dict | None = None):  # python3.10+
+    def __init__(self, *, import_name: str = __name__, server_app_kwargs: dict | None = None):  # python3.10+
         self._server_app = Quart(import_name, **(server_app_kwargs or {}))
         self._server_app.add_websocket('/ws', strict_slashes=False, view_func=_handle_wsr)
 
     def run(self, host: str = '127.0.0.1', port: int = 8080, *args, **kwargs) -> None:
-        self._server_app.run(host=host, port=port, *args, **kwargs)
+        self._server_app.run(host, port, *args, **kwargs)
