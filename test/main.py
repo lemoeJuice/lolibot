@@ -1,6 +1,6 @@
 from lolibot import Bot
-from test_config import *
-from example_usage import *
+from config import *
+import example_usage
 
 bot = Bot()
 

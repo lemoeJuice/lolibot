@@ -162,4 +162,4 @@ cython_debug/
 .idea/
 
 # 项目忽略的特定文件
-test/test_config.py
+test/config.py
