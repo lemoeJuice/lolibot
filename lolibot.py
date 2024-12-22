@@ -7,22 +7,7 @@ except ImportError:
     import json
 
 
-async def _handle_wsr_conn() -> None:
-    role = websocket.headers['X-Client-Role'].lower()
-    if role != 'universal':
-        raise Exception('当前仅支持universal客户端连接.')
-
-    while True:
-        payload = json.loads(await websocket.receive())
-        _handle_onebot_response(payload)
-
-
-# 基于quart的上下文机制，应当能够自动处理ws连接的调用，不会出现多个连接处理串台发送的情况
-# 如果需要标记每个ws连接，可以通过websocket.headers['X-Self-ID']获取当前连接实现的qq号
-async def _send_wsr(payload) -> None:
-    await websocket.send(json.dumps(payload))
-
-
+# 为每次api调用生成序列号，以识别返回结果的对应关系
 class _SequenceGenerator:
     _seq = -1
     _lock = asyncio.Lock()
@@ -34,11 +19,12 @@ class _SequenceGenerator:
             return cls._seq + 1  # 不能返回0，不然result存储类的add方法会出问题
 
 
+# 存储api返回的结果，以实现异步操作
 class _ResultStore:
     _futures = {}
 
     @classmethod
-    def add(cls, result):
+    def add(cls, result):  # python3.8+
         if seq := result.get('echo'):
             if future := cls._futures.get(seq):
                 future.set_result(result)
@@ -60,13 +46,7 @@ class _ResultStore:
         return result
 
 
-def _handle_onebot_response(payload):  # 是否需要写成异步
-    if 'post_type' in payload:  # event
-        asyncio.create_task(_handle_event(payload))
-    else:  # api
-        asyncio.create_task(_handle_api(payload))
-
-
+# 向这个列表添加函数，每当收到event推送时列表中的函数将被调用，传入的内容为onebot标准定义的原始内容
 handle_event_funcs = []
 
 
@@ -75,16 +55,39 @@ async def _handle_event(payload):
         await func(payload)
 
 
-async def _handle_api(payload):
-    _ResultStore.add(payload)
+def _handle_onebot_response(payload):
+    if 'post_type' in payload:  # event推送
+        asyncio.create_task(_handle_event(payload))
+    else:  # api响应
+        _ResultStore.add(payload)
 
 
+# 调用这个函数来使用onebot(v11)接口，接口说明文档在
+# https://github.com/botuniverse/onebot-11/tree/d4456ee706f9ada9c2dfde56a2bcfc69752600e4
 async def call_onebot_api(action_name: str, params: dict, timeout: float):
     seq = await _SequenceGenerator.next()
     await _send_wsr({'action': f'{action_name}', 'params': params, 'echo': seq})
     return await _ResultStore.fetch(seq, timeout)
 
 
+# 当有客户端连接时quart框架会自动调用这个函数，目前主流的客户端都是universal形式提供
+async def _handle_wsr_conn() -> None:
+    role = websocket.headers['X-Client-Role'].lower()
+    if role != 'universal':
+        raise Exception('当前仅支持universal客户端连接.')
+
+    while True:
+        payload = json.loads(await websocket.receive())
+        _handle_onebot_response(payload)
+
+
+# 基于quart的上下文机制，应当能够自动处理ws连接的调用，不会出现多个连接处理串台发送的情况
+# 如果需要标记每个ws连接，可以通过websocket.headers['X-Self-ID']获取当前连接实现的qq号
+async def _send_wsr(payload) -> None:
+    await websocket.send(json.dumps(payload))
+
+
+# bot类，封装了quart应用提供基于反向ws连接的消息收发功能，创建该类的实例并调用run方法以启动机器人
 class Bot:
     def __init__(self, *, import_name: str = __name__, server_app_kwargs: dict | None = None):  # python3.10+
         self._server_app = Quart(import_name, **(server_app_kwargs or {}))
