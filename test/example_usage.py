@@ -18,9 +18,20 @@ async def send_message(is_group: bool, obj_id: int, content: list[Dict[str, Any]
     return msg_id
 
 
+@handle_event
+async def handle_event_custom(payload):
+    post_type = payload['post_type']
+    if post_type == 'meta_event':
+        await Utils.handle_meta(payload)
+    elif post_type == 'message':
+        await Utils.handle_message(payload)
+    else:  # notice（群标识等） & request（加好友加群等）
+        pass
+
+
 class Utils:
     @staticmethod
-    async def _handle_meta(payload: Dict[str, Any]):
+    async def handle_meta(payload: Dict[str, Any]):
         if payload.get('meta_event_type') == 'heartbeat':
             interval = payload.get('interval')
             status = payload.get('status')
@@ -33,19 +44,8 @@ class Utils:
         print('Bot Client Connected.')
 
     @staticmethod
-    async def _handle_message(payload: Dict[str, Any]):
+    async def handle_message(payload: Dict[str, Any]):
         print(f'Message: {payload}')
         # 复读所有群聊消息
         if gid := payload.get('group_id'):
             await send_message(True, gid, payload['message'])
-
-    @staticmethod
-    @handle_event
-    async def handle_event_custom(payload):
-        post_type = payload['post_type']
-        if post_type == 'meta_event':
-            await Utils._handle_meta(payload)
-        elif post_type == 'message':
-            await Utils._handle_message(payload)
-        else:  # notice（群标识等） & request（加好友加群等）
-            pass

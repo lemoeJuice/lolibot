@@ -89,9 +89,11 @@ async def _send_wsr(payload) -> None:
 
 # bot类，封装了quart应用提供基于反向ws连接的消息收发功能，创建该类的实例并调用run方法以启动机器人
 class Bot:
-    def __init__(self, *, import_name: str = __name__, server_app_kwargs: dict | None = None):  # python3.10+
+    # 传入参数为客户端配置的反向ws端点，请务必确认严格匹配，否则可能导致连接问题，可以参考仓库中的测试用例填写
+    def __init__(self, server_endpoint, *,
+                 import_name: str = __name__, server_app_kwargs: dict | None = None):  # python3.10+
         self._server_app = Quart(import_name, **(server_app_kwargs or {}))
-        self._server_app.add_websocket('/ws/', view_func=_handle_wsr_conn)  # 需要严格匹配
+        self._server_app.add_websocket(server_endpoint, view_func=_handle_wsr_conn)
 
     # 传参方式有待改进
     def run(self, host: str = '127.0.0.1', port: int = 8080, *args, **kwargs) -> None:
