@@ -13,8 +13,8 @@ def handle_event(func):
 async def send_message(is_group: bool, obj_id: int, content: list[Dict[str, Any]]):
     params = {'message_type': 'group', 'group_id': obj_id, 'message': content} if is_group \
         else {'message_type': 'private', 'user_id': obj_id, 'message': content}
-    msg_id = (await call_onebot_api('send_msg', params, 3))['data']['message_id']
-    print(f'msg {msg_id} sent successfully.')
+    msg_id = (await call_onebot_api('send_msg_async', params, 3))['data']['message_id']
+    print(f'Message {msg_id} sent successfully.')
     return msg_id
 
 
