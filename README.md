@@ -1,4 +1,4 @@
-该项目使用OneBot v11定义的反向websocket方式与协议端进行通信，与Lagrange/NapCat/LLOnebot等协议端兼容，方便迁移
+该项目使用OneBot v11定义的反向websocket方式与协议端进行通信，与Lagrange/NapCat/LLOnebot等协议端兼容
 
 具体实现参考了[aiocqhttp](https://github.com/nonebot/aiocqhttp)框架的相关内容
 
